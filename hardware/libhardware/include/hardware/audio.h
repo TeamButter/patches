@@ -673,7 +673,7 @@ struct audio_hw_device {
                               audio_output_flags_t flags,
                               struct audio_config *config,
                               struct audio_stream_out **stream_out);
-#else
+#else 
     int (*open_output_stream)(struct audio_hw_device *dev, uint32_t devices,
                               int *format, uint32_t *channels,
                               uint32_t *sample_rate,
@@ -682,6 +682,19 @@ struct audio_hw_device {
 
     void (*close_output_stream)(struct audio_hw_device *dev,
                                 struct audio_stream_out* stream_out);
+
+#ifdef SPRD_HARDWARE
+    /** This method creates and opens the audio hardware output
+     *  for broadcast stream */
+    int (*open_broadcast_stream)(struct audio_hw_device *dev, uint32_t devices,
+                                 int format, uint32_t channels,
+                                 uint32_t sample_rate,
+                                 uint32_t audio_source,
+                                 struct audio_broadcast_stream **out);
+
+    void (*close_broadcast_stream)(struct audio_hw_device *dev,
+                                   struct audio_broadcast_stream *out);
+#endif
 
     /** This method creates and opens the audio hardware input stream */
 #ifndef ICS_AUDIO_BLOB
@@ -743,11 +756,6 @@ struct audio_hw_device {
     int (*listen_set_parameters)(struct audio_hw_device *dev,
                                  const char *kv_pairs);
 #endif
-
-#ifdef MTK_HARDWARE
-    int (*SetAudioData)(struct audio_hw_device *dev,int par1,size_t len, void *ptr);
-    int (*GetAudioData)(struct audio_hw_device *dev,int par1,size_t len, void *ptr);
-#endif
 };
 typedef struct audio_hw_device audio_hw_device_t;
 
@@ -780,4 +788,3 @@ public:
 __END_DECLS
 
 #endif  // ANDROID_AUDIO_INTERFACE_H
-
