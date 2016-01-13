@@ -285,7 +285,7 @@ public class RIL extends BaseCommands implements CommandsInterface {
     // Number of per-network elements expected in QUERY_AVAILABLE_NETWORKS's response.
     // 4 elements is default, but many RILs actually return 5, making it impossible to
     // divide the response array without prior knowledge of the number of elements.
-    protected int mQANElements = 4;
+    protected int mQANElements = 6;
 
     //***** Events
 
@@ -648,7 +648,7 @@ public class RIL extends BaseCommands implements CommandsInterface {
         }
         mContext = context;
         mCdmaSubscription  = cdmaSubscription;
-        mPreferredNetworkType = preferredNetworkType;
+        mPreferredNetworkType = NETWORK_MODE_GSM_ONLY; //preferredNetworkType;
         mSetPreferredNetworkType = preferredNetworkType;
         mPhoneType = RILConstants.NO_PHONE;
         mInstanceId = instanceId;
@@ -751,24 +751,33 @@ public class RIL extends BaseCommands implements CommandsInterface {
     public void setUiccSubscription(int slotId, int appIndex, int subId,
             int subStatus, Message result) {
         //Note: This RIL request is also valid for SIM and RUIM (ICC card)
-        RILRequest rr = RILRequest.obtain(RIL_REQUEST_SET_UICC_SUBSCRIPTION, result);
+        if (RILJ_LOGD) riljLog("setUiccSubscription " + slotId + " " + appIndex + " " + subId + " " + subStatus);
 
-        if (RILJ_LOGD) riljLog(rr.serialString() + "> " + requestToString(rr.mRequest)
-                + " slot: " + slotId + " appIndex: " + appIndex
-                + " subId: " + subId + " subStatus: " + subStatus);
+        // Fake response (note: should be sent before mSubscriptionStatusRegistrants or
+        // SubscriptionManager might not set the readiness correctly)
+        AsyncResult.forMessage(result, null, null);
+        result.sendToTarget();
 
-        rr.mParcel.writeInt(slotId);
-        rr.mParcel.writeInt(appIndex);
-        rr.mParcel.writeInt(subId);
-        rr.mParcel.writeInt(subStatus);
-
-        send(rr);
+        // TODO: Actually turn off/on the radio (and don't fight with the ServiceStateTracker)
+        if (subStatus == 1 /* ACTIVATE */) {
+            // Subscription changed: enabled
+            if (mSubscriptionStatusRegistrants != null) {
+                mSubscriptionStatusRegistrants.notifyRegistrants(
+                        new AsyncResult (null, new int[] {1}, null));
+            }
+        } else if (subStatus == 0 /* DEACTIVATE */) {
+            // Subscription changed: disabled
+            if (mSubscriptionStatusRegistrants != null) {
+                mSubscriptionStatusRegistrants.notifyRegistrants(
+                        new AsyncResult (null, new int[] {0}, null));
+            }
+        }
     }
 
     public void setDataSubscription(Message result) {
-        RILRequest rr = RILRequest.obtain(RIL_REQUEST_SET_DATA_SUBSCRIPTION, result);
-        if (RILJ_LOGD) riljLog(rr.serialString() + "> " + requestToString(rr.mRequest));
-        send(rr);
+        int simId = mInstanceId == null ? 0 : mInstanceId;
+        if (RILJ_LOGD) riljLog("Setting data subscription to " + simId);
+        invokeOemRilRequestRaw(new byte[] {(byte) 0, (byte)(0x30 + simId)}, result);
     }
 
     @Override public void
@@ -988,6 +997,7 @@ public class RIL extends BaseCommands implements CommandsInterface {
 
         rr.mParcel.writeString(address);
         rr.mParcel.writeInt(clirMode);
+        rr.mParcel.writeInt(0);
 
         if (uusInfo == null) {
             rr.mParcel.writeInt(0); // UUS information is absent
@@ -1037,9 +1047,9 @@ public class RIL extends BaseCommands implements CommandsInterface {
     getIMEI(Message result) {
         RILRequest rr = RILRequest.obtain(RIL_REQUEST_GET_IMEI, result);
 
-        if (RILJ_LOGD) riljLog(rr.serialString() + "> " + requestToString(rr.mRequest));
+        if (RILJ_LOGD) riljLog(rr.serialString() + "> " + requestToString(rr.mRequest) + " - Hack, not sending RIL request");
 
-        send(rr);
+        //send(rr);
     }
 
     @Override
@@ -1047,9 +1057,9 @@ public class RIL extends BaseCommands implements CommandsInterface {
     getIMEISV(Message result) {
         RILRequest rr = RILRequest.obtain(RIL_REQUEST_GET_IMEISV, result);
 
-        if (RILJ_LOGD) riljLog(rr.serialString() + "> " + requestToString(rr.mRequest));
+        if (RILJ_LOGD) riljLog(rr.serialString() + "> " + requestToString(rr.mRequest) + " - Hack, not sending RIL request");
 
-        send(rr);
+        //send(rr);
     }
 
 
@@ -1562,7 +1572,7 @@ public class RIL extends BaseCommands implements CommandsInterface {
                 + profile + " " + apn + " " + user + " "
                 + password + " " + authType + " " + protocol);
 
-        send(rr);
+        //send(rr);
     }
 
     @Override
@@ -1614,7 +1624,7 @@ public class RIL extends BaseCommands implements CommandsInterface {
         if (RILJ_LOGD) riljLog(rr.serialString() + "> "
                 + requestToString(rr.mRequest));
 
-        send(rr);
+        //send(rr);
     }
 
     @Override
@@ -1769,7 +1779,7 @@ public class RIL extends BaseCommands implements CommandsInterface {
 
         if (RILJ_LOGD) riljLog(rr.serialString() + "> " + requestToString(rr.mRequest));
 
-        send(rr);
+        //send(rr);
     }
 
     @Override
@@ -1949,15 +1959,15 @@ public class RIL extends BaseCommands implements CommandsInterface {
         RILRequest rr
                 = RILRequest.obtain(RIL_REQUEST_SEND_USSD, response);
 
-        if (RILJ_LOGD) {
-            String logUssdString = "*******";
-            if (RILJ_LOGV) logUssdString = ussdString;
-            riljLog(rr.serialString() + "> " + requestToString(rr.mRequest)
-                                   + " " + logUssdString);
+        byte[] ussdByte = null;
+        try {
+            ussdByte = GsmAlphabet.stringToGsm8BitPacked(ussdString);
+        } catch(Exception e) {
+            if (RILJ_LOGD) riljLog("Exception e = " + e);
         }
-
-        rr.mParcel.writeString(ussdString);
-
+        String sendData = IccUtils.bytesToHexString(ussdByte);
+        if (RILJ_LOGD) riljLog("USSD sendData = " + sendData);
+        rr.mParcel.writeString(sendData);
         send(rr);
     }
 
@@ -2756,7 +2766,7 @@ public class RIL extends BaseCommands implements CommandsInterface {
     protected String
     retToString(int req, Object ret) {
         if (ret == null) return "";
-        switch (req) {
+        /*switch (req) {
             // Don't log these return values, for privacy's sake.
             case RIL_REQUEST_GET_IMSI:
             case RIL_REQUEST_GET_IMEI:
@@ -2765,7 +2775,7 @@ public class RIL extends BaseCommands implements CommandsInterface {
                     // If not versbose logging just return and don't display IMSI and IMEI, IMEISV
                     return "";
                 }
-        }
+        }*/
 
         StringBuilder sb;
         String s;
@@ -2837,7 +2847,7 @@ public class RIL extends BaseCommands implements CommandsInterface {
             case RIL_UNSOL_RESPONSE_NEW_SMS: ret =  responseString(p); break;
             case RIL_UNSOL_RESPONSE_NEW_SMS_STATUS_REPORT: ret =  responseString(p); break;
             case RIL_UNSOL_RESPONSE_NEW_SMS_ON_SIM: ret =  responseInts(p); break;
-            case RIL_UNSOL_ON_USSD: ret =  responseStrings(p); break;
+            case RIL_UNSOL_ON_USSD: ret =  responseUSSDStrings(p); break;
             case RIL_UNSOL_NITZ_TIME_RECEIVED: ret =  responseString(p); break;
             case RIL_UNSOL_SIGNAL_STRENGTH: ret = responseSignalStrength(p); break;
             case RIL_UNSOL_DATA_CALL_LIST_CHANGED: ret = responseDataCallList(p);break;
@@ -3483,6 +3493,56 @@ public class RIL extends BaseCommands implements CommandsInterface {
 
         return response;
     }
+    
+    /*private Object responseUSSD(Parcel p) {
+        int num = 0x0;
+        int dcs = 0x0;
+        num = p.readInt();
+        dcs = p.readInt();
+        //RLog.d("RILJ", "responseUSSD - num " + num);
+        String[] response = new String[num];
+        for(int i = 0x0; i < num; i = i + 0x1) {
+            if((dcs == 0x94) && (i > 0)) {
+                byte[] str = IccUtils.hexStringToBytes(p.readString());
+                try {
+                    response[i] = new String(str, "EUC_KR");
+                    //RLog.d("RILJ", "responseUSSD :: USSD_DCS_KS5601, response" + response[i]);
+                    continue;
+                } catch(Exception ex) {
+                    response[i] = "";
+                    continue;
+                }
+                response[i] = p.readString();
+            }
+        }
+        return response;
+    }*/
+    
+    private Object responseUSSDStrings(Parcel p) {
+        String[] response = p.readStringArray();
+        if(response.length > 0x2) {
+            int num = Integer.parseInt(response[0x2]);
+            if(num == 0xf) {
+                byte[] dataUssd = IccUtils.hexStringToBytes(response[0x1]);
+                response[0x1] = GsmAlphabet.gsm8BitUnpackedToString(dataUssd, 0x0, dataUssd.length);
+                return response;
+            }
+            if(num == 0x48) {
+                byte[] bytes = new byte[(response[0x1].length() / 0x2)];
+                for(int i = 0x0; i < response[0x1].length(); i = i + 0x2) {
+                    bytes[(i / 0x2)] = (byte)Integer.parseInt(response[0x1].substring(i, (i + 0x2)), 0x10);
+                }
+                try {
+                    String utfString = new String(bytes, "UTF-16");
+                    response[0x1] = utfString;
+                    return response;
+                } catch(Exception localException1) {
+                }
+            }
+            //return response;
+        }
+        return response;
+    }
 
     protected Object
     responseStrings(Parcel p) {
@@ -3580,6 +3640,11 @@ public class RIL extends BaseCommands implements CommandsInterface {
             appStatus.pin1_replaced  = p.readInt();
             appStatus.pin1           = appStatus.PinStateFromRILInt(p.readInt());
             appStatus.pin2           = appStatus.PinStateFromRILInt(p.readInt());
+            /*appStatus.pin1_num_retries = p.readInt();
+            appStatus.puk1_num_retries = p.readInt();
+            appStatus.pin2_num_retries = p.readInt();
+            appStatus.puk2_num_retries = p.readInt();
+            appStatus.perso_unblock_retries = p.readInt();*/
             cardStatus.mApplications[i] = appStatus;
         }
         return cardStatus;
@@ -4698,3 +4763,4 @@ public class RIL extends BaseCommands implements CommandsInterface {
         send(rr);
     }
 }
+
