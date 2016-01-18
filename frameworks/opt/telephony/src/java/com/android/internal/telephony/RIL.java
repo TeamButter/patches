@@ -285,7 +285,7 @@ public class RIL extends BaseCommands implements CommandsInterface {
     // Number of per-network elements expected in QUERY_AVAILABLE_NETWORKS's response.
     // 4 elements is default, but many RILs actually return 5, making it impossible to
     // divide the response array without prior knowledge of the number of elements.
-    protected int mQANElements = 6;
+    protected int mQANElements = 5;
 
     //***** Events
 
@@ -649,7 +649,7 @@ public class RIL extends BaseCommands implements CommandsInterface {
         mContext = context;
         mCdmaSubscription  = cdmaSubscription;
         mPreferredNetworkType = NETWORK_MODE_GSM_ONLY; //preferredNetworkType;
-        mSetPreferredNetworkType = preferredNetworkType;
+        mSetPreferredNetworkType = NETWORK_MODE_GSM_ONLY;
         mPhoneType = RILConstants.NO_PHONE;
         mInstanceId = instanceId;
 
@@ -1045,11 +1045,13 @@ public class RIL extends BaseCommands implements CommandsInterface {
     @Override
     public void
     getIMEI(Message result) {
+    	if (RILJ_LOGD) riljLog("getImei enter! Starting stk service");
+    	reportStkServiceIsRunning(null);
         RILRequest rr = RILRequest.obtain(RIL_REQUEST_GET_IMEI, result);
 
-        if (RILJ_LOGD) riljLog(rr.serialString() + "> " + requestToString(rr.mRequest) + " - Hack, not sending RIL request");
+        if (RILJ_LOGD) riljLog(rr.serialString() + "> " + requestToString(rr.mRequest)/* + " - Hack, not sending RIL request"*/);
 
-        //send(rr);
+        send(rr);
     }
 
     @Override
@@ -1057,9 +1059,9 @@ public class RIL extends BaseCommands implements CommandsInterface {
     getIMEISV(Message result) {
         RILRequest rr = RILRequest.obtain(RIL_REQUEST_GET_IMEISV, result);
 
-        if (RILJ_LOGD) riljLog(rr.serialString() + "> " + requestToString(rr.mRequest) + " - Hack, not sending RIL request");
+        if (RILJ_LOGD) riljLog(rr.serialString() + "> " + requestToString(rr.mRequest)/* + " - Hack, not sending RIL request"*/);
 
-        //send(rr);
+        send(rr);
     }
 
 
@@ -4763,4 +4765,3 @@ public class RIL extends BaseCommands implements CommandsInterface {
         send(rr);
     }
 }
-
