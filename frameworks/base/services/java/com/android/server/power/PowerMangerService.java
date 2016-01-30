@@ -2676,12 +2676,13 @@ public final class PowerManagerService extends IPowerManager.Stub
             // This preparation can take more than 20 seconds if
             // there's a very large update package, so lengthen the
             // timeout.
-            SystemProperties.set("ctl.start", "pre-recovery");
+            
+            // For Samsung mint2g : ctl.start pre-recovery does not work, so use sys.powerctl reboot,recovery.
             duration = 120 * 1000L;
         } else {
-            SystemProperties.set("sys.powerctl", "reboot," + reason);
             duration = 20 * 1000L;
         }
+        SystemProperties.set("sys.powerctl", "reboot," + reason);
         try {
             Thread.sleep(duration);
         } catch (InterruptedException e) {
