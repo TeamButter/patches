@@ -1901,7 +1901,7 @@ public class RIL extends BaseCommands implements CommandsInterface {
 
         if (RILJ_LOGD) riljLog(rr.serialString() + "> " + requestToString(rr.mRequest));
 
-        send(rr);
+        //send(rr);
     }
 
     @Override
