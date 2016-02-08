@@ -1012,6 +1012,7 @@ public class RIL extends BaseCommands implements CommandsInterface {
 
         rr.mParcel.writeString(address);
         rr.mParcel.writeInt(clirMode);
+        rr.mParcel.writeInt(0); // Samsung 'magic' -_____-
 
         if (uusInfo == null) {
             rr.mParcel.writeInt(0); // UUS information is absent
