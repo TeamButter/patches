@@ -744,18 +744,27 @@ public class RIL extends BaseCommands implements CommandsInterface {
     public void setUiccSubscription(int slotId, int appIndex, int subId,
             int subStatus, Message result) {
         //Note: This RIL request is also valid for SIM and RUIM (ICC card)
-        RILRequest rr = RILRequest.obtain(RIL_REQUEST_SET_UICC_SUBSCRIPTION, result);
+        if (RILJ_LOGD) riljLog("setUiccSubscription" + slotId + " " + appIndex + " " + subId + " " + subStatus);
 
-        if (RILJ_LOGD) riljLog(rr.serialString() + "> " + requestToString(rr.mRequest)
-                + " slot: " + slotId + " appIndex: " + appIndex
-                + " subId: " + subId + " subStatus: " + subStatus);
+        // Fake response (note: should be sent before mSubscriptionStatusRegistrants or
+        // SubscriptionManager might not set the readiness correctly)
+        AsyncResult.forMessage(result, 0, null);
+        result.sendToTarget();
 
-        rr.mParcel.writeInt(slotId);
-        rr.mParcel.writeInt(appIndex);
-        rr.mParcel.writeInt(subId);
-        rr.mParcel.writeInt(subStatus);
-
-        send(rr);
+        // TODO: Actually turn off/on the radio (and don't fight with the ServiceStateTracker)
+        if (subStatus == 1 /* ACTIVATE */) {
+            // Subscription changed: enabled
+            if (mSubscriptionStatusRegistrants != null) {
+                mSubscriptionStatusRegistrants.notifyRegistrants(
+                        new AsyncResult (null, new int[] {1}, null));
+            }
+        } else if (subStatus == 0 /* DEACTIVATE */) {
+            // Subscription changed: disabled
+            if (mSubscriptionStatusRegistrants != null) {
+                mSubscriptionStatusRegistrants.notifyRegistrants(
+                        new AsyncResult (null, new int[] {0}, null));
+            }
+        }
     }
 
     // FIXME This API should take an AID and slot ID
@@ -2082,14 +2091,16 @@ public class RIL extends BaseCommands implements CommandsInterface {
         RILRequest rr
                 = RILRequest.obtain(RIL_REQUEST_SEND_USSD, response);
 
-        if (RILJ_LOGD) {
-            String logUssdString = "*******";
-            if (RILJ_LOGV) logUssdString = ussdString;
-            riljLog(rr.serialString() + "> " + requestToString(rr.mRequest)
-                                   + " " + logUssdString);
-        }
+        byte[] ussdByte = null;
+        try {
+            ussdByte = GsmAlphabet.stringToGsm8BitPacked(ussdString);
+        } catch(Exception e) {
+            if (RILJ_LOGD) riljLog("Exception e = " + e);
+         }
 
-        rr.mParcel.writeString(ussdString);
+        String sendData = IccUtils.bytesToHexString(ussdByte);
+        if (RILJ_LOGD) riljLog("USSD sendData = " + sendData);
+        rr.mParcel.writeString(sendData);
 
         send(rr);
     }
@@ -2985,7 +2996,7 @@ public class RIL extends BaseCommands implements CommandsInterface {
             case RIL_UNSOL_RESPONSE_NEW_SMS: ret =  responseString(p); break;
             case RIL_UNSOL_RESPONSE_NEW_SMS_STATUS_REPORT: ret =  responseString(p); break;
             case RIL_UNSOL_RESPONSE_NEW_SMS_ON_SIM: ret =  responseInts(p); break;
-            case RIL_UNSOL_ON_USSD: ret =  responseStrings(p); break;
+            case RIL_UNSOL_ON_USSD: ret =  responseUSSDStrings(p); break;
             case RIL_UNSOL_NITZ_TIME_RECEIVED: ret =  responseString(p); break;
             case RIL_UNSOL_SIGNAL_STRENGTH: ret = responseSignalStrength(p); break;
             case RIL_UNSOL_DATA_CALL_LIST_CHANGED: ret = responseDataCallList(p);break;
@@ -3675,6 +3686,32 @@ public class RIL extends BaseCommands implements CommandsInterface {
 
         response = p.readStringArray();
 
+        return response;
+    }
+    
+        private Object responseUSSDStrings(Parcel p) {
+        String[] response = p.readStringArray();
+        if(response.length > 0x2) {
+            int num = Integer.parseInt(response[0x2]);
+            if(num == 0xf) {
+                byte[] dataUssd = IccUtils.hexStringToBytes(response[0x1]);
+                response[0x1] = GsmAlphabet.gsm8BitUnpackedToString(dataUssd, 0x0, dataUssd.length);
+                return response;
+            }
+            if(num == 0x48) {
+                byte[] bytes = new byte[(response[0x1].length() / 0x2)];
+                for(int i = 0x0; i < response[0x1].length(); i = i + 0x2) {
+                    bytes[(i / 0x2)] = (byte)Integer.parseInt(response[0x1].substring(i, (i + 0x2)), 0x10);
+                }
+                try {
+                    String utfString = new String(bytes, "UTF-16");
+                    response[0x1] = utfString;
+                    return response;
+                } catch(Exception localException1) {
+                }
+            }
+            //return response;
+        }
         return response;
     }
 
