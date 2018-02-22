@@ -1,0 +1,39 @@
+From b66cfa0b75dbdd821153742ccedcf752d78e9505 Mon Sep 17 00:00:00 2001
+From: Avinaba Dalal <d97.avinaba@gmail.com>
+Date: Wed, 14 Feb 2018 19:39:09 +0530
+Subject: [PATCH] Hack jack
+
+Change-Id: Ibea082211351f944bc99fa6744f46cb5cdf9a703
+---
+ tools/jack-admin           | 1 +
+ tools/jack_server_setup.mk | 2 +-
+ 2 files changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/tools/jack-admin b/tools/jack-admin
+index f028d27..59871ac 100755
+--- a/tools/jack-admin
++++ b/tools/jack-admin
+@@ -484,6 +484,7 @@ case $COMMAND in
+     if [ "$RUNNING" = 0 ]; then
+       echo "Server is already running"
+     else
++      JACK_SERVER_VM_ARGUMENTS="-Dfile.encoding=UTF-8 -XX:+TieredCompilation -Xmx3g"	
+       JACK_SERVER_COMMAND="java -XX:MaxJavaStackTraceDepth=-1 -Djava.io.tmpdir=$TMPDIR $JACK_SERVER_VM_ARGUMENTS -cp $LAUNCHER_JAR $LAUNCHER_NAME"
+       echo "Launching Jack server" $JACK_SERVER_COMMAND
+       (
+diff --git a/tools/jack_server_setup.mk b/tools/jack_server_setup.mk
+index 780f890..1a8707a 100644
+--- a/tools/jack_server_setup.mk
++++ b/tools/jack_server_setup.mk
+@@ -22,7 +22,7 @@ jack_server_jar := $(LOCAL_PATH)/jack-server-$(jack_server_version).jar
+ ifneq ($(ANDROID_JACK_VM_ARGS),)
+ jack_vm_args := $(ANDROID_JACK_VM_ARGS)
+ else
+-jack_vm_args := -Dfile.encoding=UTF-8 -XX:+TieredCompilation
++jack_vm_args := -Dfile.encoding=UTF-8 -XX:+TieredCompilation -Xmx3g
+ endif
+ available_jack_jars := $(wildcard $(LOCAL_PATH)/jacks/jack-*.jar)
+ 
+-- 
+2.14.1
+
